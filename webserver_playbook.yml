@@ -1,0 +1,49 @@
+---
+- hosts: webservers
+
+  remote_user: aj
+
+  vars:
+  - soulshake_path: /home/aj/deleteme
+
+  tasks:
+    - name: set my authorized key from url
+      authorized_key:
+        user: aj
+        state: present
+        key: https://github.com/soulshake.keys
+
+    - name: add docker repository key
+      become: yes
+      apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+
+    - name: use docker sources list
+      become: yes
+      apt_repository:
+        repo: deb deb https://download.docker.com/linux/ubuntu stretch docker
+
+    - name: install deb packages
+      become: yes
+      become_method: sudo
+      apt:
+        name: "{{item}}"
+        state: installed
+        update_cache: yes
+      with_items:
+      - git
+      - docker-ce
+      - vim
+      - iptables
+
+    - name: ensure docker running
+      service: name=docker state=started
+      become: yes
+      become_method: sudo
+
+    - name: checkout soulshake.net
+      git:
+        repo: git://github.com/soulshake/soulshake.net
+        #dest: "/home/aj/purple"
+        dest: "{{soulshake_path}}/soulshake.net"
+        track_submodules: True

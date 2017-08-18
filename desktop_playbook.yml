@@ -1,0 +1,156 @@
+---
+- hosts: desktops
+    # PREREQUISITES
+    # packages: sudo
+    # ssh and gpg keys
+    # secrets
+
+  remote_user: aj
+
+  vars:
+  - git_path: /home/aj/git
+  - distro: stretch
+  - user: aj
+
+
+  tasks:
+    - name: set my authorized key from url
+      authorized_key:
+        user: aj
+        state: present
+        key: https://github.com/soulshake.keys
+
+    - name: add docker repository key
+      become: yes
+      become_method: sudo
+      apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+
+    - name: use docker sources list
+      become: yes
+      become_method: sudo
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/debian {{ distro }} stable # $(lsb_release -cs)
+
+    - name: install initial deb packages
+      become: yes
+      become_method: sudo
+      apt:
+        name: "{{item}}"
+        state: installed
+        update_cache: no
+      with_items:
+      - apt-transport-https
+
+    - name: install deb packages
+      become: yes
+      become_method: sudo
+      apt:
+        name: "{{item}}"
+        state: installed
+        update_cache: yes
+      with_items:
+      - arandr
+      - ca-certificates
+      - curl
+      - direnv
+      - docker-ce
+      - git
+      - gnupg2
+      - google-chrome-stable
+      - iptables
+      - libappindicator1
+      - make
+      - ruby
+      - ruby-dev
+      - software-properties-common
+      - vim
+
+    #- name: add user to docker group
+      #user: name='{{ user }}'
+            #groups=docker
+            #append=yes
+      #become: yes
+      #become_method: sudo
+
+    - name: ensure docker running
+      service: name=docker state=started
+
+    - name: create dotfiles directory
+      file: path="{{git_path}}/dotfiles" state=directory
+
+    - name: create git templates directory
+      file: path="~/.git-templates" state=directory
+
+    - name: clone git templates
+      git:
+        repo: git@github.com:soulshake/git-templates.git
+        accept_hostkey: true
+        dest: "~/.git-templates"
+        recursive: true
+        track_submodules: true
+
+    - name: checkout dotfiles
+      git:
+        repo: git@bitbucket.org:soulshake/dotfiles.git
+        accept_hostkey: true
+        dest: "{{git_path}}/dotfiles"
+        recursive: true
+        track_submodules: true
+
+    - name: make dotfiles
+      command: make dotfiles
+      args:
+        chdir: "git/dotfiles"
+
+
+    # install google chrome ---------------------------------------------------
+    - name: check if google-chrome is installed
+      command: which google-chrome
+      register: google_chrome_check_deb
+      failed_when: google_chrome_check_deb.rc > 1
+      changed_when: google_chrome_check_deb.rc == 1
+
+    - name: download google chrome installer
+      get_url:
+        url: https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+        dest: "$HOME/Downloads/google-chrome-stable_current_amd64.deb"
+      when: google_chrome_check_deb.rc == 1
+
+    - name: install google chrome
+      apt: deb="/home/{{ ansible_env.USER }}/Downloads/google-chrome-stable_current_amd64.deb"
+        state=present
+      sudo: true
+      when: google_chrome_check_deb.rc == 1
+
+
+    # install slack -----------------------------------------------------------
+    - name: check if slack is installed
+      command: which slack
+      register: slack_check_deb
+      failed_when: slack_check_deb.rc > 1
+      changed_when: slack_check_deb.rc == 1
+
+    - name: download google chrome installer
+      get_url:
+        url: https://downloads.slack-edge.com/linux_releases/slack-desktop-2.7.0-amd64.deb
+        dest: "$HOME/Downloads/slack-desktop-2.7.0-amd64.deb"
+      when: slack_check_deb.rc == 1
+
+    - name: install slack
+      apt: deb="/home/{{ ansible_env.USER }}/Downloads/slack-desktop-2.7.0-amd64.deb"
+        state=present
+      sudo: true
+      when: slack_check_deb.rc == 1
+
+    # install trash-cli -------------------------------------------------------
+    - name: check if trash-cli is installed
+      command: which trash
+      register: trash_check
+
+    - name: install trash-cli
+      command: easy_install trash-cli
+      become: yes
+      become_method: sudo
+      when: trash_check.rc == 1
+
